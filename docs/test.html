@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Efecto 3D y Holograma - TCG Dual</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <!-- Ztext library -->
+    <script src="js/ztext.js"></script>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            padding: 40px;
+            min-height: 100vh;
+            background: #0f0f0f;
+            color: white;
+            align-items: center;
+        }
+        .test-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .btn-test {
+            background: #333;
+            color: white;
+            border: 1px solid #555;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        .btn-test.active {
+            background: #00a8ff;
+            border-color: #00d2ff;
+        }
+        .instructions {
+            max-width: 600px;
+            text-align: center;
+            font-size: 0.9rem;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    <h1>Prueba de Efecto 3D y Holograma</h1>
+
+    <div class="test-controls">
+        <button class="btn-test active" data-effect="">Sin Efecto</button>
+        <button class="btn-test" data-effect="super-rare">Super Rare</button>
+        <button class="btn-test" data-effect="secret-rare">Secret Rare</button>
+        <button class="btn-test" data-effect="foil">Foil</button>
+        <button class="btn-test" data-effect="rainbow">Rainbow</button>
+        <button class="btn-test" data-effect="ghost-rare">Ghost Rare</button>
+        <button class="btn-test" data-effect="custom-texture">Custom Texture</button>
+    </div>
+
+    <div id="card-3d-container" class="card-3d-container">
+        <div id="card-3d" class="card-3d">
+            <div id="z-text-container">
+                <img id="expanded-image" src="https://picsum.photos/220/308" alt="Test Card">
+            </div>
+            <div class="holo-layer"></div>
+        </div>
+    </div>
+
+    <div class="instructions">
+        <p>Mueve el mouse sobre la carta, arrastra con el dedo o mueve tu celular (giroscopio) para ver el efecto.</p>
+        <p>El movimiento es suave gracias a la interpolación lineal (LERP).</p>
+    </div>
+
+    <script>
+        // Copy logic from app.js to test here
+        let targetRX = 0;
+        let targetRY = 0;
+        let currentRX = 0;
+        let currentRY = 0;
+        let card3dActive = true;
+        let card3dZtext = null;
+
+        function updateRotation() {
+            if (!card3dActive) return;
+
+            currentRX += (targetRX - currentRX) * 0.1;
+            currentRY += (targetRY - currentRY) * 0.1;
+
+            const $card = $('#card-3d');
+            if ($card.length) {
+                $card.css('transform', `rotateX(${currentRX}deg) rotateY(${currentRY}deg)`);
+
+                const mx = (currentRY + 20) / 40;
+                const my = (currentRX + 20) / 40;
+                const angle = (Math.atan2(currentRX, currentRY) * 180 / Math.PI) + 135;
+
+                $card.css({
+                    '--mx': mx,
+                    '--my': my,
+                    '--angle': `${angle}deg`
+                });
+            }
+
+            requestAnimationFrame(updateRotation);
+        }
+
+        function init3D() {
+            try {
+                card3dZtext = new Ztextify('#z-text-container', {
+                    depth: "10px",
+                    layers: 10,
+                    fade: true,
+                    direction: "backwards",
+                    event: "none",
+                    perspective: "800px"
+                });
+            } catch (e) { console.error(e); }
+
+            const $container = $('#card-3d-container');
+
+            $container.on('mousemove', (e) => {
+                const rect = $container[0].getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                targetRY = ((x / rect.width) - 0.5) * 40;
+                targetRX = ((y / rect.height) - 0.5) * -40;
+            });
+
+            $container.on('mouseleave touchend', () => {
+                targetRX = 0;
+                targetRY = 0;
+            });
+
+            $container[0].addEventListener('touchmove', (e) => {
+                const rect = $container[0].getBoundingClientRect();
+                const touch = e.touches[0];
+                const x = touch.clientX - rect.left;
+                const y = touch.clientY - rect.top;
+                targetRY = ((x / rect.width) - 0.5) * 40;
+                targetRX = ((y / rect.height) - 0.5) * -40;
+                if (e.cancelable) e.preventDefault();
+            }, { passive: false });
+
+            if (window.DeviceOrientationEvent) {
+                window.addEventListener('deviceorientation', (e) => {
+                    if (e.gamma !== null && e.beta !== null) {
+                        targetRY = Math.max(-20, Math.min(20, e.gamma)) * 1.5;
+                        targetRX = Math.max(-20, Math.min(20, e.beta - 45)) * 1.5;
+                    }
+                });
+            }
+
+            requestAnimationFrame(updateRotation);
+        }
+
+        $(document).ready(() => {
+            init3D();
+
+            const sampleMask = "data:image/png;base64,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|";
+
+            $('.btn-test').click(function() {
+                const effect = $(this).data('effect');
+                $('.btn-test').removeClass('active');
+                $(this).addClass('active');
+
+                const $container = $('#card-3d-container');
+                $container.removeClass('super-rare secret-rare foil rainbow ghost-rare custom-texture active');
+                $container.find('.holo-layer').css('--mask-url', '');
+
+                if (effect) {
+                    $container.addClass(effect);
+                    if (effect === 'custom-texture') {
+                        $container.find('.holo-layer').css('--mask-url', `url(${sampleMask})`);
+                    }
+                    setTimeout(() => $container.addClass('active'), 50);
+                }
+            });
+        });
+    </script>
+</body>
+</html>

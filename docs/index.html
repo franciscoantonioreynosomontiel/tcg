@@ -1,0 +1,63 @@
+<!DOCTYPE html>    
+<html lang="es">    
+<head>    
+    <meta charset="UTF-8">    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">    
+    <title>Carpeta TCG Dual - Visor</title>    
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>    
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>    
+<body class="public-body">
+    <header class="public-header">
+        <h1>TCG Dual</h1>
+        <p>Tu plataforma para coleccionar y mostrar tus cartas TCG de manera profesional.</p>
+        <div style="margin-top: 25px; display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">
+            <a href="admin.html" class="btn"><i class="fas fa-user-lock"></i> Panel de Control</a>
+            <a href="public.html?store=TCG%20Dual" class="btn btn-secondary"><i class="fas fa-book-open"></i> Ver Demo</a>
+        </div>
+    </header>
+
+    <main class="landing-container" style="max-width: 1000px; margin: 0 auto; padding: 60px 20px; color: white;">
+        <section style="text-align: center; margin-bottom: 80px;">
+            <h2 style="font-size: 2.5rem; margin-bottom: 20px; color: #00d2ff;">Organiza tu Colección</h2>
+            <p style="font-size: 1.2rem; opacity: 0.8; line-height: 1.6; max-width: 800px; margin: 0 auto;">
+                TCG Dual es la herramienta definitiva para coleccionistas y tiendas de cartas. Crea álbumes digitales interactivos que tus clientes y amigos pueden hojear como si fueran reales.
+            </p>
+        </section>
+
+        <div class="features-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 40px;">
+            <div class="feature-card" style="background: rgba(255,255,255,0.05); padding: 30px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.1); text-align: center;">
+                <i class="fas fa-magic" style="font-size: 3rem; color: #00d2ff; margin-bottom: 20px;"></i>
+                <h3 style="margin-bottom: 15px;">Efecto de Hoja Real</h3>
+                <p style="opacity: 0.7;">Tecnología Turn.js para una experiencia de navegación fluida y natural en tus álbumes.</p>
+            </div>
+            <div class="feature-card" style="background: rgba(255,255,255,0.05); padding: 30px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.1); text-align: center;">
+                <i class="fas fa-database" style="font-size: 3rem; color: #00d2ff; margin-bottom: 20px;"></i>
+                <h3 style="margin-bottom: 15px;">Gestión en la Nube</h3>
+                <p style="opacity: 0.7;">Tus datos siempre seguros y accesibles desde cualquier lugar gracias a Supabase.</p>
+            </div>
+            <div class="feature-card" style="background: rgba(255,255,255,0.05); padding: 30px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.1); text-align: center;">
+                <i class="fas fa-mobile-alt" style="font-size: 3rem; color: #00d2ff; margin-bottom: 20px;"></i>
+                <h3 style="margin-bottom: 15px;">Totalmente Responsive</h3>
+                <p style="opacity: 0.7;">Diseñado para verse perfecto tanto en computadoras de escritorio como en dispositivos móviles.</p>
+            </div>
+        </div>
+
+        <section style="margin-top: 100px; text-align: center; background: linear-gradient(135deg, rgba(0,210,255,0.1), rgba(0,255,136,0.1)); padding: 60px; border-radius: 30px; border: 1px solid rgba(0,210,255,0.2);">
+            <h2 style="margin-bottom: 20px;">¿Listo para empezar?</h2>
+            <p style="margin-bottom: 30px; opacity: 0.8;">Únete a la nueva era de coleccionismo digital.</p>
+            <a href="admin.html" class="btn" style="padding: 15px 40px; font-size: 1.2rem;">Crear mi Cuenta</a>
+        </section>
+    </main>
+
+    <footer style="text-align: center; padding: 40px; opacity: 0.5; font-size: 0.9rem;">
+        &copy; 2024 TCG Dual - Todos los derechos reservados.
+    </footer>
+    
+    <!-- Librerías -->    
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="js/supabase-config.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</body>    
+</html>

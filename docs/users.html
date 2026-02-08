@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Usuarios - TCG Dual</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="public-body">
+    <div class="admin-nav">
+        <a href="admin.html" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Volver al Admin</a>
+        <button id="btn-logout" class="btn btn-danger"><i class="fas fa-sign-out-alt"></i> Cerrar Sesión</button>
+    </div>
+
+    <div class="admin-section active">
+        <div class="admin-header">
+            <h1><i class="fas fa-users-cog"></i> Gestión de Usuarios</h1>
+            <button id="btn-show-create-user" class="btn"><i class="fas fa-user-plus"></i> Nuevo Usuario</button>
+        </div>
+
+        <!-- Create User Form (Modal-like) -->
+        <div id="create-user-panel" class="album-card" style="display: none; max-width: 500px; margin: 20px auto; padding: 20px;">
+            <h3>Crear Nuevo Usuario</h3>
+            <div class="form-group">
+                <label>Nombre de Usuario</label>
+                <input type="text" id="new-username" placeholder="usuario123">
+            </div>
+            <div class="form-group">
+                <label>Contraseña</label>
+                <input type="text" id="new-password" placeholder="contraseña123">
+            </div>
+            <div class="form-group">
+                <label>Nombre de la Tienda</label>
+                <input type="text" id="new-store" placeholder="Mi Tienda TCG">
+            </div>
+            <div class="form-group">
+                <label>Rol</label>
+                <select id="new-role" style="width: 100%; padding: 10px; background: #252525; color: white; border: 1px solid #3d3d3d; border-radius: 8px;">
+                    <option value="user">Usuario</option>
+                    <option value="admin_store">Admin store</option>
+                    <option value="admin">Admin</option>
+                </select>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 15px;">
+                <button id="btn-save-user" class="btn" style="flex: 1;">Guardar</button>
+                <button id="btn-cancel-user" class="btn btn-secondary" style="flex: 1;">Cancelar</button>
+            </div>
+        </div>
+
+        <table class="user-table">
+            <thead>
+                <tr>
+                    <th>Usuario</th>
+                    <th>Contraseña</th>
+                    <th>Tienda</th>
+                    <th>Rol</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="user-list-body">
+                <!-- Users will be loaded here -->
+                <tr><td colspan="5" class="loading">Cargando usuarios...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="js/supabase-config.js"></script>
+    <script>
+        $(document).ready(async function() {
+            // Check session
+            const sessionData = localStorage.getItem('tcg_session');
+            if (!sessionData) {
+                window.location.href = 'admin.html';
+                return;
+            }
+
+            const currentUser = JSON.parse(sessionData);
+            if (currentUser.role !== 'admin') {
+                await Swal.fire('Acceso Denegado', 'Solo los administradores pueden acceder a este panel.', 'error');
+                window.location.href = 'admin.html';
+                return;
+            }
+
+            // Load Users Function
+            async function loadUsers() {
+                const { data: users, error } = await _supabase
+                    .from('usuarios')
+                    .select('*')
+                    .order('created_at', { ascending: false });
+
+                if (error) {
+                    $('#user-list-body').html('<tr><td colspan="5" class="error">Error al cargar usuarios.</td></tr>');
+                    return;
+                }
+
+                $('#user-list-body').empty();
+                users.forEach(user => {
+                    const $row = $(`
+                        <tr data-id="${user.id}">
+                            <td>${user.username}</td>
+                            <td>${user.password}</td>
+                            <td>${user.store_name || '-'}</td>
+                            <td>
+                                <select class="role-select" data-id="${user.id}" style="background: #252525; color: white; border: 1px solid #3d3d3d; padding: 5px; border-radius: 4px;">
+                                    <option value="user" ${user.role === 'user' ? 'selected' : ''}>Usuario</option>
+                                    <option value="admin_store" ${user.role === 'admin_store' ? 'selected' : ''}>Admin store</option>
+                                    <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Admin</option>
+                                </select>
+                            </td>
+                            <td>
+                                <button class="btn btn-danger btn-sm btn-delete-user" data-id="${user.id}"><i class="fas fa-trash"></i></button>
+                            </td>
+                        </tr>
+                    `);
+                    $('#user-list-body').append($row);
+                });
+            }
+
+            // Initial load
+            await loadUsers();
+
+            // Toggle Create Form
+            $('#btn-show-create-user').click(() => $('#create-user-panel').slideToggle());
+            $('#btn-cancel-user').click(() => $('#create-user-panel').slideUp());
+
+            // Create User
+            $('#btn-save-user').click(async function() {
+                const username = $('#new-username').val();
+                const password = $('#new-password').val();
+                const store_name = $('#new-store').val();
+                const role = $('#new-role').val();
+
+                if (!username || !password || !store_name) {
+                    Swal.fire('Atención', 'Por favor, completa todos los campos', 'warning');
+                    return;
+                }
+
+                const { error } = await _supabase
+                    .from('usuarios')
+                    .insert([{ username, password, store_name, role }]);
+
+                if (error) {
+                    Swal.fire('Error', 'No se pudo crear el usuario: ' + error.message, 'error');
+                } else {
+                    Swal.fire('¡Éxito!', 'Usuario creado correctamente', 'success');
+                    $('#create-user-panel').slideUp();
+                    $('#new-username, #new-password, #new-store').val('');
+                    loadUsers();
+                }
+            });
+
+            // Role Change Event
+            $(document).on('change', '.role-select', async function() {
+                const userId = $(this).data('id');
+                const newRole = $(this).val();
+
+                const { error } = await _supabase
+                    .from('usuarios')
+                    .update({ role: newRole })
+                    .eq('id', userId);
+
+                if (error) {
+                    Swal.fire('Error', 'No se pudo actualizar el rol', 'error');
+                    console.error(error);
+                } else {
+                    if (userId === currentUser.id) {
+                        currentUser.role = newRole;
+                        localStorage.setItem('tcg_session', JSON.stringify(currentUser));
+                    }
+                    Swal.fire({
+                        title: 'Actualizado',
+                        text: 'Rol del usuario actualizado con éxito',
+                        icon: 'success',
+                        timer: 1500,
+                        showConfirmButton: false
+                    });
+                }
+            });
+
+            // Delete User Event
+            $(document).on('click', '.btn-delete-user', async function() {
+                const userId = $(this).data('id');
+                if (userId === currentUser.id) {
+                    Swal.fire('Acción denegada', 'No puedes eliminar tu propia cuenta.', 'info');
+                    return;
+                }
+
+                const result = await Swal.fire({
+                    title: '¿Eliminar usuario?',
+                    text: "Esta acción eliminará permanentemente al usuario",
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#ff4757',
+                    confirmButtonText: 'Sí, eliminar',
+                    cancelButtonText: 'Cancelar'
+                });
+
+                if (result.isConfirmed) {
+                    const { error } = await _supabase
+                        .from('usuarios')
+                        .delete()
+                        .eq('id', userId);
+
+                    if (error) {
+                        Swal.fire('Error', 'No se pudo eliminar al usuario', 'error');
+                    } else {
+                        Swal.fire('Eliminado', 'Usuario borrado con éxito', 'success');
+                        loadUsers();
+                    }
+                }
+            });
+
+            $('#btn-logout').click(function() {
+                localStorage.removeItem('tcg_session');
+                window.location.href = 'admin.html';
+            });
+        });
+    </script>
+</body>
+</html>
