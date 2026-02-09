@@ -14,6 +14,10 @@ let currentTool = 'brush'; // 'brush' or 'eraser'
 let maskHistory = [];
 const MAX_HISTORY = 20;
 
+let lastSearchId = 0;
+let searchAbortController = null;
+const tcgdex = typeof TCGdex !== 'undefined' ? new TCGdex('es') : null;
+
 $(document).ready(function() {
     checkSession();
 
@@ -197,6 +201,71 @@ $(document).ready(function() {
             $('#custom-mask-container').show();
         } else {
             $('#custom-mask-container').hide();
+        }
+    });
+
+    // External Search Events
+    $('#btn-search-card').click(async function(e) {
+        e.preventDefault();
+        const query = $('#search-card-input').val();
+        const type = $('#search-card-type').val();
+
+        if (!query) return;
+
+        const searchId = ++lastSearchId;
+        $(this).html('<i class="fas fa-spinner fa-spin"></i>');
+        const results = await fetchCards(query, type);
+
+        if (searchId !== lastSearchId) return;
+        $(this).html('<i class="fas fa-search"></i>');
+
+        displaySearchResults(results);
+    });
+
+    $('#search-card-input').keypress(function(e) {
+        if (e.which == 13) {
+            e.preventDefault();
+            $('#btn-search-card').click();
+        }
+    });
+
+    // Real-time search with debounce
+    const handleRealTimeSearch = debounce(async function() {
+        const query = $('#search-card-input').val();
+        const type = $('#search-card-type').val();
+
+        if (query.length < 3) {
+            $('#search-results').hide();
+            return;
+        }
+
+        const searchId = ++lastSearchId;
+        $('#btn-search-card').html('<i class="fas fa-spinner fa-spin"></i>');
+
+        // Mostrar estado de carga en el dropdown
+        $('#search-results').html('<div style="padding: 15px; color: #888; text-align: center;"><i class="fas fa-spinner fa-spin"></i> Buscando en ' + (type === 'yugioh' ? 'Yu-Gi-Oh!...' : 'Pokémon...') + '</div>').show();
+
+        try {
+            const results = await fetchCards(query, type);
+            if (searchId !== lastSearchId) return;
+            $('#btn-search-card').html('<i class="fas fa-search"></i>');
+            displaySearchResults(results);
+        } catch (error) {
+            if (searchId === lastSearchId) {
+                $('#btn-search-card').html('<i class="fas fa-search"></i>');
+                if (error.name !== 'AbortError') {
+                    $('#search-results').html('<div style="padding: 15px; color: #ff4d4d; text-align: center;">Error al buscar cartas</div>');
+                }
+            }
+        }
+    }, 800);
+
+    $('#search-card-input').on('input', handleRealTimeSearch);
+
+    // Close search results when clicking outside
+    $(document).on('click', function(e) {
+        if (!$(e.target).closest('.search-container, .search-results-dropdown').length) {
+            $('#search-results').hide();
         }
     });
 
@@ -704,6 +773,7 @@ function editDeckCard(card) {
     editingType = 'deck-card';
     currentDeckCardId = card.id;
 
+    resetSearch();
     $('#slot-image-url').val(card.image_url || '');
     $('#slot-name').val(card.name || '');
     $('#slot-holo-effect').val(card.holo_effect || '');
@@ -922,8 +992,14 @@ async function deletePage(id) {
     }
 }
 
+function resetSearch() {
+    $('#search-results').hide();
+    $('#search-card-input').val('');
+}
+
 async function loadSlotData(pageId, slotIndex) {
     editingType = 'slot';
+    resetSearch();
     const { data, error } = await _supabase
         .from('card_slots')
         .select('*')
@@ -961,4 +1037,171 @@ async function loadSlotData(pageId, slotIndex) {
     }
 
     $('#slot-modal').addClass('active');
+}
+
+// --- External Search Logic ---
+
+function debounce(func, wait) {
+    let timeout;
+    return function(...args) {
+        const context = this;
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(context, args), wait);
+    };
+}
+
+async function fetchCards(query, type) {
+    if (!query) return [];
+
+    if (searchAbortController) {
+        searchAbortController.abort();
+    }
+    searchAbortController = new AbortController();
+    const signal = searchAbortController.signal;
+    const timeoutId = setTimeout(() => searchAbortController.abort(), 15000); // Aumentado a 15s
+
+    try {
+        if (type === 'pokemon') {
+            // Usar la API REST de TCGdex directamente para búsqueda filtrada
+            const response = await fetch(`https://api.tcgdex.net/v2/es/cards?name=${encodeURIComponent(query)}`, { signal: signal });
+            if (!response.ok) return [];
+            const results = await response.json();
+
+            clearTimeout(timeoutId);
+            if (!Array.isArray(results)) return [];
+
+            // Limitar resultados para fluidez
+            return results.slice(0, 20).map(card => ({
+                id: card.id,
+                name: card.name,
+                imageUrlSmall: card.image ? `${card.image}/low.webp` : '',
+                imageUrlLarge: card.image ? `${card.image}/high.png` : '',
+                details: `ID: ${card.localId}`,
+                set: '', // Se cargará al seleccionar
+                rarity: '',
+                type: 'pokemon'
+            }));
+        } else if (type === 'yugioh') {
+            const response = await fetch(`https://db.ygoprodeck.com/api/v7/cardinfo.php?fname=${encodeURIComponent(query)}`, { signal: signal });
+            clearTimeout(timeoutId);
+            const json = await response.json();
+            if (!json.data) return [];
+
+            const results = [];
+            const seen = new Set();
+
+            for (const card of json.data) {
+                for (const img of card.card_images) {
+                    if (card.card_sets && card.card_sets.length > 0) {
+                        for (const set of card.card_sets) {
+                            const key = `${card.name}|${set.set_name}|${set.set_rarity}|${img.image_url}`;
+                            if (!seen.has(key)) {
+                                seen.add(key);
+                                results.push({
+                                    name: card.name,
+                                    imageUrlSmall: img.image_url_small,
+                                    imageUrlLarge: img.image_url,
+                                    details: card.type,
+                                    set: set.set_name,
+                                    rarity: set.set_rarity,
+                                    type: 'yugioh'
+                                });
+                            }
+                            if (results.length >= 100) break;
+                        }
+                    } else {
+                        const key = `${card.name}|NoSet|Common|${img.image_url}`;
+                        if (!seen.has(key)) {
+                            seen.add(key);
+                            results.push({
+                                name: card.name,
+                                imageUrlSmall: img.image_url_small,
+                                imageUrlLarge: img.image_url,
+                                details: card.type,
+                                set: 'No Set Info',
+                                rarity: 'Common',
+                                type: 'yugioh'
+                            });
+                        }
+                    }
+                    if (results.length >= 100) break;
+                }
+                if (results.length >= 100) break;
+            }
+            return results;
+        }
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            console.log('Fetch de búsqueda abortado');
+        } else {
+            console.error("Error fetching cards:", error);
+        }
+        return [];
+    } finally {
+        clearTimeout(timeoutId);
+    }
+    return [];
+}
+
+function displaySearchResults(results) {
+    const $container = $('#search-results');
+    $container.empty();
+
+    if (results.length === 0) {
+        $container.html('<div style="padding: 15px; color: #666; font-size: 13px;">No se encontraron resultados.</div>');
+        $container.show();
+        return;
+    }
+
+    results.forEach(card => {
+        const $item = $(`
+            <div class="search-result-item">
+                <img src="${card.imageUrlSmall}" alt="${card.name}">
+                <div class="search-result-info">
+                    <span class="search-result-name">${card.name}</span>
+                    <span class="search-result-details">${card.details}</span>
+                    <span class="search-result-set">${card.set} ${card.rarity ? '('+card.rarity+')' : ''}</span>
+                </div>
+            </div>
+        `);
+
+        $item.click(() => selectCard(card));
+        $container.append($item);
+    });
+
+    $container.show();
+}
+
+async function selectCard(card) {
+    if (card.type === 'pokemon' && card.id && tcgdex) {
+        // Mostrar indicador de carga en los inputs mientras se obtienen detalles
+        $('#slot-name').val('Cargando detalles...');
+
+        try {
+            const fullCard = await tcgdex.card.get(card.id);
+            if (fullCard) {
+                card.imageUrlLarge = fullCard.getImageURL('high', 'png');
+                card.rarity = fullCard.rarity || '';
+                card.set = fullCard.set ? fullCard.set.name : '';
+            }
+        } catch (e) {
+            console.error("Error fetching full pokemon card data:", e);
+        }
+    }
+
+    $('#slot-image-url').val(card.imageUrlLarge);
+    $('#slot-name').val(card.name);
+    $('#slot-rarity').val(card.rarity);
+    $('#slot-expansion').val(card.set);
+
+    $('#search-results').hide();
+    $('#search-card-input').val('');
+
+    Swal.fire({
+        title: '¡Cargado!',
+        text: 'Información de la carta cargada en el formulario.',
+        icon: 'success',
+        timer: 1500,
+        showConfirmButton: false
+    });
 }
