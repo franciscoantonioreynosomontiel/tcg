@@ -16,6 +16,7 @@ const MAX_HISTORY = 20;
 
 let lastSearchId = 0;
 let searchAbortController = null;
+const tcgdex = typeof TCGdex !== 'undefined' ? new TCGdex('es') : null;
 
 $(document).ready(function() {
     checkSession();
@@ -1061,31 +1062,23 @@ async function fetchCards(query, type) {
 
     try {
         if (type === 'pokemon') {
-            const response = await fetch(`https://api.pokemontcg.io/v2/cards?q=name:${encodeURIComponent(query)}*&pageSize=20&select=name,images,rarity,supertype,set`, {
-                signal: signal,
-                headers: {
-                    'X-Api-Key': '6e1f80cf-7380-4588-ba65-d907cc2386f8'
-                }
-            });
+            // Usar la API REST de TCGdex directamente para búsqueda filtrada
+            const response = await fetch(`https://api.tcgdex.net/v2/es/cards?name=${encodeURIComponent(query)}`, { signal: signal });
+            if (!response.ok) return [];
+            const results = await response.json();
 
             clearTimeout(timeoutId);
+            if (!Array.isArray(results)) return [];
 
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.error('Pokemon API Error:', response.status, errorText);
-                return [];
-            }
-
-            const json = await response.json();
-            if (!json.data) return [];
-
-            return json.data.map(card => ({
+            // Limitar resultados para fluidez
+            return results.slice(0, 20).map(card => ({
+                id: card.id,
                 name: card.name,
-                imageUrlSmall: card.images.small,
-                imageUrlLarge: card.images.large,
-                details: `${card.rarity || 'Common'} - ${card.supertype}`,
-                set: card.set ? card.set.name : '',
-                rarity: card.rarity || '',
+                imageUrlSmall: card.image ? `${card.image}/low.webp` : '',
+                imageUrlLarge: card.image ? `${card.image}/high.png` : '',
+                details: `ID: ${card.localId}`,
+                set: '', // Se cargará al seleccionar
+                rarity: '',
                 type: 'pokemon'
             }));
         } else if (type === 'yugioh') {
@@ -1164,10 +1157,10 @@ function displaySearchResults(results) {
         const $item = $(`
             <div class="search-result-item">
                 <img src="${card.imageUrlSmall}" alt="${card.name}">
-                <div class="info">
-                    <div class="name">${card.name}</div>
-                    <div class="details">${card.details}</div>
-                    <div class="set">${card.set} ${card.rarity ? '('+card.rarity+')' : ''}</div>
+                <div class="search-result-info">
+                    <span class="search-result-name">${card.name}</span>
+                    <span class="search-result-details">${card.details}</span>
+                    <span class="search-result-set">${card.set} ${card.rarity ? '('+card.rarity+')' : ''}</span>
                 </div>
             </div>
         `);
@@ -1179,7 +1172,23 @@ function displaySearchResults(results) {
     $container.show();
 }
 
-function selectCard(card) {
+async function selectCard(card) {
+    if (card.type === 'pokemon' && card.id && tcgdex) {
+        // Mostrar indicador de carga en los inputs mientras se obtienen detalles
+        $('#slot-name').val('Cargando detalles...');
+
+        try {
+            const fullCard = await tcgdex.card.get(card.id);
+            if (fullCard) {
+                card.imageUrlLarge = fullCard.getImageURL('high', 'png');
+                card.rarity = fullCard.rarity || '';
+                card.set = fullCard.set ? fullCard.set.name : '';
+            }
+        } catch (e) {
+            console.error("Error fetching full pokemon card data:", e);
+        }
+    }
+
     $('#slot-image-url').val(card.imageUrlLarge);
     $('#slot-name').val(card.name);
     $('#slot-rarity').val(card.rarity);
