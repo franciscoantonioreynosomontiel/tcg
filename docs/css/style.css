@@ -1369,3 +1369,91 @@ input:checked + .slider:before {
 #brush-size {
     cursor: pointer;
 }
+
+/* Card Searcher Styles */
+.search-results-dropdown {
+    background: #1a1a1a;
+    border: 1px solid #3d3d3d;
+    border-radius: 12px;
+    max-height: 300px;
+    overflow-y: auto;
+    position: absolute;
+    width: calc(100% - 30px);
+    z-index: 1000;
+    margin-top: 5px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+    left: 15px;
+}
+
+.search-result-item {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 12px;
+    cursor: pointer;
+    border-bottom: 1px solid #333;
+    transition: all 0.2s;
+}
+
+.search-result-item:last-child {
+    border-bottom: none;
+}
+
+.search-result-item:hover {
+    background: #252525;
+    padding-left: 18px;
+}
+
+.search-result-item img {
+    width: 45px;
+    height: 65px;
+    object-fit: contain;
+    border-radius: 6px;
+    background: #000;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+}
+
+.search-result-item .info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.search-result-item .name {
+    font-weight: 700;
+    font-size: 14px;
+    color: #fff;
+    line-height: 1.2;
+}
+
+.search-result-item .details {
+    font-size: 11px;
+    color: #00a8ff;
+    text-transform: uppercase;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+.search-result-item .set {
+    font-size: 10px;
+    color: #666;
+}
+
+/* Custom Scrollbar for Search Results */
+.search-results-dropdown::-webkit-scrollbar {
+    width: 6px;
+}
+
+.search-results-dropdown::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.search-results-dropdown::-webkit-scrollbar-thumb {
+    background: #333;
+    border-radius: 10px;
+}
+
+.search-results-dropdown::-webkit-scrollbar-thumb:hover {
+    background: #444;
+}
