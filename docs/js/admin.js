@@ -163,18 +163,11 @@ $(document).ready(function() {
                 .upsert(slotData, { onConflict: 'page_id,slot_index' });
             error = result.error;
         } else {
-            if (currentDeckCardId) {
-                const result = await _supabase
-                    .from('deck_cards')
-                    .update(cardData)
-                    .eq('id', currentDeckCardId);
-                error = result.error;
-            } else {
-                const result = await _supabase
-                    .from('deck_cards')
-                    .insert([{ ...cardData, deck_id: currentDeckId }]);
-                error = result.error;
-            }
+            const result = await _supabase
+                .from('deck_cards')
+                .update(cardData)
+                .eq('id', currentDeckCardId);
+            error = result.error;
         }
 
         if (error) {
@@ -463,26 +456,27 @@ $(document).ready(function() {
         }
     });
 
-    $('#btn-add-deck-card').click(function(e) {
+    $('#btn-add-deck-card').click(async function(e) {
         e.preventDefault();
-        editingType = 'deck-card';
-        currentDeckCardId = null;
+        const { value: url } = await Swal.fire({
+            title: 'Añadir imagen al deck',
+            input: 'url',
+            inputLabel: 'URL de la imagen',
+            inputPlaceholder: 'https://...',
+            showCancelButton: true
+        });
 
-        // Limpiar campos del modal para nueva carta
-        $('#slot-image-url').val('');
-        $('#slot-name').val('');
-        $('#slot-holo-effect').val('');
-        $('#slot-custom-mask').val('');
-        $('#slot-rarity').val('');
-        $('#slot-expansion').val('');
-        $('#slot-condition').val('');
-        $('#slot-quantity').val(1);
-        $('#slot-price').val('');
+        if (url) {
+            const { error } = await _supabase
+                .from('deck_cards')
+                .insert([{ deck_id: currentDeckId, image_url: url }]);
 
-        $('#custom-mask-container').hide();
-        resetSearch();
-
-        $('#slot-modal').addClass('active');
+            if (error) {
+                Swal.fire('Error', 'No se pudo añadir la imagen', 'error');
+            } else {
+                loadDeckCards(currentDeckId);
+            }
+        }
     });
 
     // Toggle Public/Private from list
@@ -787,143 +781,6 @@ function editDeckCard(card) {
     $('#slot-modal').addClass('active');
 }
 
-// --- External Search Logic ---
-
-function debounce(func, wait) {
-    let timeout;
-    return function(...args) {
-        const context = this;
-        clearTimeout(timeout);
-        timeout = setTimeout(() => func.apply(context, args), wait);
-    };
-}
-
-async function fetchCards(query, type) {
-    if (!query) return [];
-
-    try {
-        if (type === 'pokemon') {
-            const response = await fetch(`https://api.pokemontcg.io/v2/cards?q=name:"${encodeURIComponent(query)}*"&pageSize=20`, {
-                headers: {
-                    'X-Api-Key': '6e1f80cf-7380-4588-ba65-d907cc2386f8'
-                }
-            });
-            const json = await response.json();
-            if (!json.data) return [];
-
-            return json.data.map(card => ({
-                name: card.name,
-                imageUrlSmall: card.images.small,
-                imageUrlLarge: card.images.large,
-                details: `${card.rarity || 'Common'} - ${card.supertype}`,
-                set: card.set ? card.set.name : '',
-                rarity: card.rarity || '',
-                type: 'pokemon'
-            }));
-        } else if (type === 'yugioh') {
-            const response = await fetch(`https://db.ygoprodeck.com/api/v7/cardinfo.php?fname=${encodeURIComponent(query)}`);
-            const json = await response.json();
-            if (!json.data) return [];
-
-            const results = [];
-            const seen = new Set();
-
-            json.data.forEach(card => {
-                // Para cada carta, mostramos todas las imágenes (artes alternativos)
-                // Y todas las expansiones/rarezas.
-                // Usamos un Set para no repetir exactamente la misma combinación.
-
-                card.card_images.forEach(img => {
-                    if (card.card_sets && card.card_sets.length > 0) {
-                        card.card_sets.forEach(set => {
-                            const key = `${card.name}|${set.set_name}|${set.set_rarity}|${img.image_url}`;
-                            if (!seen.has(key)) {
-                                seen.add(key);
-                                results.push({
-                                    name: card.name,
-                                    imageUrlSmall: img.image_url_small,
-                                    imageUrlLarge: img.image_url,
-                                    details: card.type,
-                                    set: set.set_name,
-                                    rarity: set.set_rarity,
-                                    type: 'yugioh'
-                                });
-                            }
-                        });
-                    } else {
-                        const key = `${card.name}|NoSet|Common|${img.image_url}`;
-                        if (!seen.has(key)) {
-                            seen.add(key);
-                            results.push({
-                                name: card.name,
-                                imageUrlSmall: img.image_url_small,
-                                imageUrlLarge: img.image_url,
-                                details: card.type,
-                                set: 'No Set Info',
-                                rarity: 'Common',
-                                type: 'yugioh'
-                            });
-                        }
-                    }
-                });
-            });
-            // Limit to 100 results to maintain performance
-            return results.slice(0, 100);
-        }
-    } catch (error) {
-        console.error("Error fetching cards:", error);
-        return [];
-    }
-    return [];
-}
-
-function displaySearchResults(results) {
-    const $container = $('#search-results');
-    $container.empty();
-
-    if (results.length === 0) {
-        $container.html('<div style="padding: 15px; color: #666; font-size: 13px;">No se encontraron resultados.</div>');
-        $container.show();
-        return;
-    }
-
-    results.forEach(card => {
-        const $item = $(`
-            <div class="search-result-item">
-                <img src="${card.imageUrlSmall}" alt="${card.name}">
-                <div class="info">
-                    <div class="name">${card.name}</div>
-                    <div class="details">${card.details}</div>
-                    <div class="set">${card.set} ${card.rarity ? '('+card.rarity+')' : ''}</div>
-                </div>
-            </div>
-        `);
-
-        $item.click(() => selectCard(card));
-        $container.append($item);
-    });
-
-    $container.show();
-}
-
-function selectCard(card) {
-    $('#slot-image-url').val(card.imageUrlLarge);
-    $('#slot-name').val(card.name);
-    $('#slot-rarity').val(card.rarity);
-    $('#slot-expansion').val(card.set);
-
-    $('#search-results').hide();
-    $('#search-card-input').val('');
-
-    Swal.fire({
-        title: '¡Cargado!',
-        text: 'Información de la carta cargada en el formulario.',
-        icon: 'success',
-        timer: 1500,
-        showConfirmButton: false
-    });
-}
-
 async function loadAlbums() {
     $('#album-list').html('<div class="loading">Cargando álbumes...</div>');
 
@@ -1167,4 +1024,136 @@ async function loadSlotData(pageId, slotIndex) {
     }
 
     $('#slot-modal').addClass('active');
+}
+
+// --- External Search Logic ---
+
+function debounce(func, wait) {
+    let timeout;
+    return function(...args) {
+        const context = this;
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(context, args), wait);
+    };
+}
+
+async function fetchCards(query, type) {
+    if (!query) return [];
+
+    try {
+        if (type === 'pokemon') {
+            const response = await fetch(`https://api.pokemontcg.io/v2/cards?q=name:"${encodeURIComponent(query)}*"&pageSize=20`, {
+                headers: {
+                    'X-Api-Key': '6e1f80cf-7380-4588-ba65-d907cc2386f8'
+                }
+            });
+            const json = await response.json();
+            if (!json.data) return [];
+
+            return json.data.map(card => ({
+                name: card.name,
+                imageUrlSmall: card.images.small,
+                imageUrlLarge: card.images.large,
+                details: `${card.rarity || 'Common'} - ${card.supertype}`,
+                set: card.set ? card.set.name : '',
+                rarity: card.rarity || '',
+                type: 'pokemon'
+            }));
+        } else if (type === 'yugioh') {
+            const response = await fetch(`https://db.ygoprodeck.com/api/v7/cardinfo.php?fname=${encodeURIComponent(query)}`);
+            const json = await response.json();
+            if (!json.data) return [];
+
+            const results = [];
+            const seen = new Set();
+
+            json.data.forEach(card => {
+                card.card_images.forEach(img => {
+                    if (card.card_sets && card.card_sets.length > 0) {
+                        card.card_sets.forEach(set => {
+                            const key = `${card.name}|${set.set_name}|${set.set_rarity}|${img.image_url}`;
+                            if (!seen.has(key)) {
+                                seen.add(key);
+                                results.push({
+                                    name: card.name,
+                                    imageUrlSmall: img.image_url_small,
+                                    imageUrlLarge: img.image_url,
+                                    details: card.type,
+                                    set: set.set_name,
+                                    rarity: set.set_rarity,
+                                    type: 'yugioh'
+                                });
+                            }
+                        });
+                    } else {
+                        const key = `${card.name}|NoSet|Common|${img.image_url}`;
+                        if (!seen.has(key)) {
+                            seen.add(key);
+                            results.push({
+                                name: card.name,
+                                imageUrlSmall: img.image_url_small,
+                                imageUrlLarge: img.image_url,
+                                details: card.type,
+                                set: 'No Set Info',
+                                rarity: 'Common',
+                                type: 'yugioh'
+                            });
+                        }
+                    }
+                });
+            });
+            return results.slice(0, 100);
+        }
+    } catch (error) {
+        console.error("Error fetching cards:", error);
+        return [];
+    }
+    return [];
+}
+
+function displaySearchResults(results) {
+    const $container = $('#search-results');
+    $container.empty();
+
+    if (results.length === 0) {
+        $container.html('<div style="padding: 15px; color: #666; font-size: 13px;">No se encontraron resultados.</div>');
+        $container.show();
+        return;
+    }
+
+    results.forEach(card => {
+        const $item = $(`
+            <div class="search-result-item">
+                <img src="${card.imageUrlSmall}" alt="${card.name}">
+                <div class="info">
+                    <div class="name">${card.name}</div>
+                    <div class="details">${card.details}</div>
+                    <div class="set">${card.set} ${card.rarity ? '('+card.rarity+')' : ''}</div>
+                </div>
+            </div>
+        `);
+
+        $item.click(() => selectCard(card));
+        $container.append($item);
+    });
+
+    $container.show();
+}
+
+function selectCard(card) {
+    $('#slot-image-url').val(card.imageUrlLarge);
+    $('#slot-name').val(card.name);
+    $('#slot-rarity').val(card.rarity);
+    $('#slot-expansion').val(card.set);
+
+    $('#search-results').hide();
+    $('#search-card-input').val('');
+
+    Swal.fire({
+        title: '¡Cargado!',
+        text: 'Información de la carta cargada en el formulario.',
+        icon: 'success',
+        timer: 1500,
+        showConfirmButton: false
+    });
 }
