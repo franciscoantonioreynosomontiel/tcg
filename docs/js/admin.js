@@ -15,6 +15,7 @@ let maskHistory = [];
 const MAX_HISTORY = 20;
 
 let lastSearchId = 0;
+let searchAbortController = null;
 
 $(document).ready(function() {
     checkSession();
@@ -239,13 +240,24 @@ $(document).ready(function() {
 
         const searchId = ++lastSearchId;
         $('#btn-search-card').html('<i class="fas fa-spinner fa-spin"></i>');
-        const results = await fetchCards(query, type);
 
-        if (searchId !== lastSearchId) return;
-        $('#btn-search-card').html('<i class="fas fa-search"></i>');
+        // Mostrar estado de carga en el dropdown
+        $('#search-results').html('<div style="padding: 15px; color: #888; text-align: center;"><i class="fas fa-spinner fa-spin"></i> Buscando en ' + (type === 'yugioh' ? 'Yu-Gi-Oh!...' : 'Pokémon...') + '</div>').show();
 
-        displaySearchResults(results);
-    }, 500);
+        try {
+            const results = await fetchCards(query, type);
+            if (searchId !== lastSearchId) return;
+            $('#btn-search-card').html('<i class="fas fa-search"></i>');
+            displaySearchResults(results);
+        } catch (error) {
+            if (searchId === lastSearchId) {
+                $('#btn-search-card').html('<i class="fas fa-search"></i>');
+                if (error.name !== 'AbortError') {
+                    $('#search-results').html('<div style="padding: 15px; color: #ff4d4d; text-align: center;">Error al buscar cartas</div>');
+                }
+            }
+        }
+    }, 800);
 
     $('#search-card-input').on('input', handleRealTimeSearch);
 
@@ -1040,13 +1052,30 @@ function debounce(func, wait) {
 async function fetchCards(query, type) {
     if (!query) return [];
 
+    if (searchAbortController) {
+        searchAbortController.abort();
+    }
+    searchAbortController = new AbortController();
+    const signal = searchAbortController.signal;
+    const timeoutId = setTimeout(() => searchAbortController.abort(), 15000); // Aumentado a 15s
+
     try {
         if (type === 'pokemon') {
-            const response = await fetch(`https://api.pokemontcg.io/v2/cards?q=name:"${encodeURIComponent(query)}*"&pageSize=20`, {
+            const response = await fetch(`https://api.pokemontcg.io/v2/cards?q=name:${encodeURIComponent(query)}*&pageSize=20&select=name,images,rarity,supertype,set`, {
+                signal: signal,
                 headers: {
                     'X-Api-Key': '6e1f80cf-7380-4588-ba65-d907cc2386f8'
                 }
             });
+
+            clearTimeout(timeoutId);
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('Pokemon API Error:', response.status, errorText);
+                return [];
+            }
+
             const json = await response.json();
             if (!json.data) return [];
 
@@ -1060,17 +1089,18 @@ async function fetchCards(query, type) {
                 type: 'pokemon'
             }));
         } else if (type === 'yugioh') {
-            const response = await fetch(`https://db.ygoprodeck.com/api/v7/cardinfo.php?fname=${encodeURIComponent(query)}`);
+            const response = await fetch(`https://db.ygoprodeck.com/api/v7/cardinfo.php?fname=${encodeURIComponent(query)}`, { signal: signal });
+            clearTimeout(timeoutId);
             const json = await response.json();
             if (!json.data) return [];
 
             const results = [];
             const seen = new Set();
 
-            json.data.forEach(card => {
-                card.card_images.forEach(img => {
+            for (const card of json.data) {
+                for (const img of card.card_images) {
                     if (card.card_sets && card.card_sets.length > 0) {
-                        card.card_sets.forEach(set => {
+                        for (const set of card.card_sets) {
                             const key = `${card.name}|${set.set_name}|${set.set_rarity}|${img.image_url}`;
                             if (!seen.has(key)) {
                                 seen.add(key);
@@ -1084,7 +1114,8 @@ async function fetchCards(query, type) {
                                     type: 'yugioh'
                                 });
                             }
-                        });
+                            if (results.length >= 100) break;
+                        }
                     } else {
                         const key = `${card.name}|NoSet|Common|${img.image_url}`;
                         if (!seen.has(key)) {
@@ -1100,13 +1131,21 @@ async function fetchCards(query, type) {
                             });
                         }
                     }
-                });
-            });
-            return results.slice(0, 100);
+                    if (results.length >= 100) break;
+                }
+                if (results.length >= 100) break;
+            }
+            return results;
         }
     } catch (error) {
-        console.error("Error fetching cards:", error);
+        if (error.name === 'AbortError') {
+            console.log('Fetch de búsqueda abortado');
+        } else {
+            console.error("Error fetching cards:", error);
+        }
         return [];
+    } finally {
+        clearTimeout(timeoutId);
     }
     return [];
 }
