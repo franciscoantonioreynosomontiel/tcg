@@ -14,6 +14,8 @@ let currentTool = 'brush'; // 'brush' or 'eraser'
 let maskHistory = [];
 const MAX_HISTORY = 20;
 
+let lastSearchId = 0;
+
 $(document).ready(function() {
     checkSession();
 
@@ -215,8 +217,11 @@ $(document).ready(function() {
 
         if (!query) return;
 
+        const searchId = ++lastSearchId;
         $(this).html('<i class="fas fa-spinner fa-spin"></i>');
         const results = await fetchCards(query, type);
+
+        if (searchId !== lastSearchId) return;
         $(this).html('<i class="fas fa-search"></i>');
 
         displaySearchResults(results);
@@ -239,8 +244,11 @@ $(document).ready(function() {
             return;
         }
 
+        const searchId = ++lastSearchId;
         $('#btn-search-card').html('<i class="fas fa-spinner fa-spin"></i>');
         const results = await fetchCards(query, type);
+
+        if (searchId !== lastSearchId) return;
         $('#btn-search-card').html('<i class="fas fa-search"></i>');
 
         displaySearchResults(results);
@@ -818,30 +826,44 @@ async function fetchCards(query, type) {
             if (!json.data) return [];
 
             const results = [];
+            const seen = new Set();
+
             json.data.forEach(card => {
+                // Para cada carta, mostramos todas las imágenes (artes alternativos)
+                // Y todas las expansiones/rarezas.
+                // Usamos un Set para no repetir exactamente la misma combinación.
+
                 card.card_images.forEach(img => {
                     if (card.card_sets && card.card_sets.length > 0) {
                         card.card_sets.forEach(set => {
+                            const key = `${card.name}|${set.set_name}|${set.set_rarity}|${img.image_url}`;
+                            if (!seen.has(key)) {
+                                seen.add(key);
+                                results.push({
+                                    name: card.name,
+                                    imageUrlSmall: img.image_url_small,
+                                    imageUrlLarge: img.image_url,
+                                    details: card.type,
+                                    set: set.set_name,
+                                    rarity: set.set_rarity,
+                                    type: 'yugioh'
+                                });
+                            }
+                        });
+                    } else {
+                        const key = `${card.name}|NoSet|Common|${img.image_url}`;
+                        if (!seen.has(key)) {
+                            seen.add(key);
                             results.push({
                                 name: card.name,
                                 imageUrlSmall: img.image_url_small,
                                 imageUrlLarge: img.image_url,
                                 details: card.type,
-                                set: set.set_name,
-                                rarity: set.set_rarity,
+                                set: 'No Set Info',
+                                rarity: 'Common',
                                 type: 'yugioh'
                             });
-                        });
-                    } else {
-                        results.push({
-                            name: card.name,
-                            imageUrlSmall: img.image_url_small,
-                            imageUrlLarge: img.image_url,
-                            details: card.type,
-                            set: 'No Set Info',
-                            rarity: 'Common',
-                            type: 'yugioh'
-                        });
+                        }
                     }
                 });
             });
