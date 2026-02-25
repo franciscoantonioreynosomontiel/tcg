@@ -257,13 +257,25 @@ function updateRotation() {
 
         // Update holo effects variables
         const mx = (currentRY + 20) / 40;
-        const my = (currentRX + 20) / 40;
+        const my = (currentRX - 20) / -40;
         const angle = (Math.atan2(currentRX, currentRY) * 180 / Math.PI) + 135;
+
+        const px = mx * 100;
+        const py = my * 100;
+        const center = { x: px - 50, y: py - 50 };
+        const pointerFromCenter = Math.min(Math.sqrt(center.x * center.x + center.y * center.y) / 50, 1);
 
         $card.css({
             '--mx': mx,
             '--my': my,
-            '--angle': `${angle}deg`
+            '--angle': `${angle}deg`,
+            '--pointer-x': `${px}%`,
+            '--pointer-y': `${py}%`,
+            '--background-x': `${px}%`,
+            '--background-y': `${py}%`,
+            '--pointer-from-center': pointerFromCenter,
+            '--pointer-from-top': py / 100,
+            '--pointer-from-left': px / 100
         });
     }
 
@@ -370,6 +382,47 @@ function init3DCard() {
     }
 }
 
+function applyNewHoloEffect($card, holo, mask) {
+    const effectsMap = {
+        'amazing-rare': { rarity: 'amazing rare' },
+        'cosmos-holo': { rarity: 'rare holo cosmos' },
+        'radiant-holo': { rarity: 'radiant rare' },
+        'rainbow-alt': { rarity: 'rare rainbow alt' },
+        'rainbow-holo': { rarity: 'rare rainbow' },
+        'regular-holo': { rarity: 'rare holo' },
+        'reverse-holo': { rarity: 'reverse holo' },
+        'secret-rare-new': { rarity: 'secret rare' },
+        'shiny-rare': { rarity: 'shiny rare' },
+        'shiny-v': { rarity: 'v', subtypes: 'shiny' },
+        'shiny-vmax': { rarity: 'vmax', subtypes: 'shiny' },
+        'swsh-pikachu': { set: 'swshp', number: 'swsh020' },
+        'trainer-full-art': { supertype: 'trainer', subtypes: 'full art' },
+        'trainer-gallery-holo': { 'trainer-gallery': 'true' },
+        'trainer-gallery-secret-rare': { rarity: 'secret rare', 'trainer-gallery': 'true' },
+        'trainer-gallery-v-max': { rarity: 'vmax', 'trainer-gallery': 'true' },
+        'trainer-gallery-v-regular': { rarity: 'v', 'trainer-gallery': 'true' },
+        'v-full-art': { rarity: 'v', subtypes: 'full art' },
+        'v-max': { rarity: 'vmax' },
+        'v-regular': { rarity: 'v' },
+        'v-star': { rarity: 'vstar' }
+    };
+
+    const config = effectsMap[holo];
+    if (config) {
+        if (config.rarity) $card.attr('data-rarity', config.rarity);
+        if (config.subtypes) $card.attr('data-subtypes', config.subtypes);
+        if (config.supertype) $card.attr('data-supertype', config.supertype);
+        if (config['trainer-gallery']) $card.attr('data-trainer-gallery', config['trainer-gallery']);
+        if (config.set) $card.attr('data-set', config.set);
+        if (config.number) $card.attr('data-number', config.number);
+    }
+
+    if (mask) {
+        $card.addClass('masked');
+        $card.css('--mask', `url(${mask})`);
+    }
+}
+
 function openCardModal($slot) {
     const imgSrc = $slot.find("img").attr("src");
 
@@ -390,16 +443,32 @@ function openCardModal($slot) {
             <img id="expanded-image" src="${imgSrc}" alt="${name}">
         </div>
         <div class="holo-layer"></div>
+        <div class="card__shine"></div>
+        <div class="card__glare"></div>
     `);
 
-    const $card3d = $("#card-3d-container");
-    $card3d.removeClass("super-rare secret-rare ghost-rare foil rainbow custom-texture active");
+    const $card3d = $("#card-3d");
+    const $cardContainer = $("#card-3d-container");
+
+    // Reset all effects and attributes
+    $cardContainer.removeClass("super-rare secret-rare ghost-rare foil rainbow custom-texture active");
+    $card3d.removeClass("card masked interacting");
+    $card3d.removeAttr("data-rarity data-subtypes data-supertype data-trainer-gallery data-set data-number");
     $card3d.find('.holo-layer').css('--mask-url', '');
+    $card3d.css('--mask', '');
 
     if (holo) {
-        $card3d.addClass(holo);
-        if (holo === 'custom-texture' && mask) {
-            $card3d.find('.holo-layer').css('--mask-url', `url(${mask})`);
+        // Handle Old Effects (classes on container)
+        const oldEffects = ['super-rare', 'secret-rare', 'ghost-rare', 'foil', 'rainbow', 'custom-texture'];
+        if (oldEffects.includes(holo)) {
+            $cardContainer.addClass(holo);
+            if (holo === 'custom-texture' && mask) {
+                $card3d.find('.holo-layer').css('--mask-url', `url(${mask})`);
+            }
+        } else {
+            // Handle New Effects (data attributes on #card-3d)
+            $card3d.addClass("card");
+            applyNewHoloEffect($card3d, holo, mask);
         }
     }
 

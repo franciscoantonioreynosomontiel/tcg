@@ -1,3 +1,26 @@
+@import url("cards/base.css");
+@import url("cards/amazing-rare.css");
+@import url("cards/basic.css");
+@import url("cards/cosmos-holo.css");
+@import url("cards/radiant-holo.css");
+@import url("cards/rainbow-alt.css");
+@import url("cards/rainbow-holo.css");
+@import url("cards/regular-holo.css");
+@import url("cards/reverse-holo.css");
+@import url("cards/secret-rare.css");
+@import url("cards/shiny-rare.css");
+@import url("cards/shiny-v.css");
+@import url("cards/shiny-vmax.css");
+@import url("cards/swsh-pikachu.css");
+@import url("cards/trainer-full-art.css");
+@import url("cards/trainer-gallery-holo.css");
+@import url("cards/trainer-gallery-secret-rare.css");
+@import url("cards/trainer-gallery-v-max.css");
+@import url("cards/trainer-gallery-v-regular.css");
+@import url("cards/v-full-art.css");
+@import url("cards/v-max.css");
+@import url("cards/v-regular.css");
+@import url("cards/v-star.css");
 
 .card {
 
